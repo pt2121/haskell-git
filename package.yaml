@@ -28,6 +28,7 @@ dependencies:
 - bytestring
 - containers
 - directory
+- exceptions
 - filepath
 - utf8-string
 - zlib               
