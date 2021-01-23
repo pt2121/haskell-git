@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5531a9d615d536dd5b792b4a89542230dd161a55168d1ff8d69572bdfeccf65c
+-- hash: 7ef1e329bc214ce0c0bfb8dd9b1f5623a0d9e35d93c32a881ee13ba5c61f0903
 
 name:           haskell-git
 version:        0.1.0.0
@@ -33,18 +33,18 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
-      , SHA
-      , attoparsec
-      , base16-bytestring
-      , byteable
-      , bytestring
-      , containers
-      , directory
-      , exceptions
-      , filepath
-      , utf8-string
-      , zlib
+      SHA
+    , attoparsec
+    , base >=4.7 && <5
+    , base16-bytestring
+    , byteable
+    , bytestring
+    , containers
+    , directory
+    , exceptions
+    , filepath
+    , utf8-string
+    , zlib
   default-language: Haskell2010
 
 executable haskell-git-exe
@@ -55,8 +55,19 @@ executable haskell-git-exe
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      SHA
+    , attoparsec
+    , base >=4.7 && <5
+    , base16-bytestring
+    , byteable
+    , bytestring
+    , containers
+    , directory
+    , exceptions
+    , filepath
     , haskell-git
+    , utf8-string
+    , zlib
   default-language: Haskell2010
 
 test-suite haskell-git-test
@@ -68,6 +79,17 @@ test-suite haskell-git-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      SHA
+    , attoparsec
+    , base >=4.7 && <5
+    , base16-bytestring
+    , byteable
+    , bytestring
+    , containers
+    , directory
+    , exceptions
+    , filepath
     , haskell-git
+    , utf8-string
+    , zlib
   default-language: Haskell2010
