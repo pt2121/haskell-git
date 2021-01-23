@@ -1,6 +1,6 @@
 module Main where
 
-import Lib
+import Lib ( printCommit )
 
 main :: IO ()
-main = runDecompress
+main = printCommit
