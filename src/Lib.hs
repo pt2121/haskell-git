@@ -1,5 +1,10 @@
--- https://vaibhavsagar.com/blog/2017/08/13/i-haskell-a-git/
+-- slightly modified from https://vaibhavsagar.com/blog/2017/08/13/i-haskell-a-git/
+-- resources
 -- https://stefan.saasen.me/articles/git-clone-in-haskell-from-the-bottom-up/
+-- https://shop.jcoglan.com/building-git/
+-- https://codecrafters.io/challenges/git
+-- https://wyag.thb.lt/
+-- https://jwiegley.github.io/git-from-the-bottom-up/
 {-# LANGUAGE OverloadedStrings #-}
 module Lib
     ( printCommit
@@ -16,6 +21,7 @@ import           Data.ByteString                  (ByteString, intercalate)
 import qualified Data.ByteString                  as B
 import           Data.ByteString.Lazy             (fromStrict, toStrict)
 import           Data.ByteString.UTF8             (fromString, toString)
+import           Data.Digest.Pure.SHA             (sha1, showDigest)
 import           Data.Monoid                      (mappend, mconcat, (<>))
 
 type Ref = ByteString
@@ -43,6 +49,7 @@ printCommit = do
     B.putStr $ withHeader "commit" (toBytes parsedCommit)
     c <- parse parseCommit . toBytes $ parsedCommit
     print $ parsedCommit == c
+    print $ hash (withHeader "commit" (toBytes parsedCommit))
     -- print $ toBytes parsedCommit
     -- either print print (parse (parseHeader *> parseCommit) commit :: Either SomeException Commit)
     -- parsedCommit = parsed (parseHeader *> parseCommit) commit
@@ -102,3 +109,6 @@ instance Byteable Commit where
 
 withHeader :: ByteString -> ByteString -> ByteString
 withHeader objType content = mconcat [objType, " ", fromString . show $ B.length content, "\NUL", content]
+
+hash :: ByteString -> Ref
+hash = fromString . showDigest . sha1 . fromStrict
