@@ -11,9 +11,12 @@ import           Control.Monad.Catch              (MonadThrow (..))
 import           Data.Attoparsec.ByteString       (Parser)
 import qualified Data.Attoparsec.ByteString.Char8 as AC
 import qualified Data.Attoparsec.Internal.Types
+import           Data.Byteable                    (Byteable (toBytes))
 import           Data.ByteString                  (ByteString, intercalate)
 import qualified Data.ByteString                  as B
 import           Data.ByteString.Lazy             (fromStrict, toStrict)
+import           Data.ByteString.UTF8             (fromString, toString)
+import           Data.Monoid                      (mappend, mconcat, (<>))
 
 type Ref = ByteString
 
@@ -36,7 +39,13 @@ printCommit :: IO ()
 printCommit = do
     line <- getLine
     commit <- decompress <$> B.readFile line
-    either print print (parse (parseHeader *> parseCommit) commit :: Either SomeException Commit)
+    parsedCommit <- parse (parseHeader *> parseCommit) commit
+    B.putStr $ withHeader "commit" (toBytes parsedCommit)
+    c <- parse parseCommit . toBytes $ parsedCommit
+    print $ parsedCommit == c
+    -- print $ toBytes parsedCommit
+    -- either print print (parse (parseHeader *> parseCommit) commit :: Either SomeException Commit)
+    -- parsedCommit = parsed (parseHeader *> parseCommit) commit
 
 compress :: ByteString -> ByteString
 compress   = toStrict . Z.compress   . fromStrict
@@ -79,3 +88,17 @@ parseCommit = do
     cSignature <- (AC.option Nothing . fmap Just) (AC.string "gpgsig" *> parseSignature        <* AC.endOfLine)
     AC.endOfLine
     Commit cTree cParents cAuthor cCommitter cSignature <$> AC.takeByteString
+
+instance Byteable Commit where
+    toBytes (Commit cTree cParents cAuthor cCommitter cSignature cMessage) = mconcat
+        [                        "tree "      <> cTree      <> "\n"
+        , mconcat (map (\cRef -> "parent "    <> cRef       <> "\n") cParents)
+        ,                        "author "    <> cAuthor    <> "\n"
+        ,                        "committer " <> cCommitter <> "\n"
+        , maybe mempty (\s ->    "gpgsig"     <> s          <> "\n") cSignature
+        ,                                                      "\n"
+        ,                                        cMessage
+        ]
+
+withHeader :: ByteString -> ByteString -> ByteString
+withHeader objType content = mconcat [objType, " ", fromString . show $ B.length content, "\NUL", content]
