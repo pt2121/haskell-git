@@ -1,6 +1,6 @@
 module Main where
 
-import Lib ( printBlob )
+import Lib ( letTest )
 
 main :: IO ()
-main = printBlob
+main = letTest

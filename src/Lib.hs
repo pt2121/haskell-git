@@ -7,13 +7,16 @@
 -- https://jwiegley.github.io/git-from-the-bottom-up/
 {-# LANGUAGE OverloadedStrings #-}
 module Lib
-    ( printCommit
-    , printTree
+    ( letTest
     , printBlob
+    , printCommit
+    , printGitObject
+    , printTree
     ) where
 
 import qualified Codec.Compression.Zlib           as Z (compress, decompress)
 import           Control.Exception                (Exception, SomeException)
+import           Control.Monad                    (unless, when)
 import           Control.Monad.Catch              (MonadThrow (..))
 import           Data.Attoparsec.ByteString       (Parser)
 import qualified Data.Attoparsec.ByteString.Char8 as AC
@@ -27,11 +30,15 @@ import           Data.ByteString.Lazy             (fromStrict, toStrict)
 import           Data.ByteString.UTF8             (fromString, toString)
 import           Data.Digest.Pure.SHA             (sha1, showDigest)
 import           Data.Monoid                      (mappend, mconcat, (<>))
+import           Data.Traversable                 (for)
+import           System.Directory                 (createDirectoryIfMissing,
+                                                   doesPathExist, listDirectory)
+import           System.FilePath                  (takeDirectory, (</>))
 
 type Ref = ByteString
 
-data HGitException = ParserError String | Unknown deriving (Show)
-instance Exception HGitException
+data GithException = ParserError String | Unknown deriving (Show)
+instance Exception GithException
 
 data Commit = Commit
     { commitTree      :: Ref
@@ -174,3 +181,80 @@ printBlob = do
 
 instance Byteable Blob where
     toBytes (Blob content) = content
+
+data GitObject
+    = GitCommit Commit
+    | GitTree   Tree
+    | GitBlob   Blob
+    deriving (Eq, Show)
+
+parseGitObject :: Parser GitObject
+parseGitObject = do
+    headerLen <- parseHeader
+    case fst headerLen of
+        "commit" -> GitCommit <$> parseCommit
+        "tree"   -> GitTree   <$> parseTree
+        "blob"   -> GitBlob   <$> parseBlob
+        _        -> error "not a git object"
+
+instance Byteable GitObject where
+    toBytes obj = case obj of
+        GitCommit c -> withHeader "commit" (toBytes c)
+        GitTree   t -> withHeader "tree"   (toBytes t)
+        GitBlob   b -> withHeader "blob"   (toBytes b)
+
+hashObject :: GitObject -> Ref
+hashObject = hash . toBytes
+
+printGitObject :: IO ()
+printGitObject = do
+    line <- getLine
+    obj <- decompress <$> B.readFile line
+    parsedObj <- parse parseGitObject obj
+    print parsedObj
+
+refPath :: FilePath -> Ref -> FilePath
+refPath gitDir ref = let
+   (dir,file) = splitAt 2 (toString ref)
+   in gitDir </> "objects" </> dir </> file
+
+readObject :: FilePath -> Ref -> IO GitObject
+readObject gitDir ref = do
+    let path = refPath gitDir ref
+    content <- decompress <$> B.readFile path
+    parse parseGitObject content
+
+writeObject :: FilePath -> GitObject -> IO Ref
+writeObject gitDir object = do
+    let ref  =  hashObject object
+    let path =  refPath gitDir ref
+    exists   <- doesPathExist path
+    unless exists $ do
+        let dir = takeDirectory path
+        createDirectoryIfMissing True dir
+        B.writeFile path . compress $ toBytes object
+    return ref
+
+letTest :: IO ()
+letTest = do
+    allRefs <- do
+        prefixes <- filter (\d -> length d == 2) <$> listDirectory ".git/objects/"
+        concat <$> for prefixes (\p ->
+            map (fromString . (p++)) <$> listDirectory (".git/objects" </> p))
+    print $ length allRefs
+
+    test <- for allRefs $ \ref -> do
+        obj  <- readObject  ".git" ref
+        ref' <- writeObject ".gith" obj
+        return $ ref == ref'
+
+    print $ and test
+
+    allRefs' <- do
+        prefixes <- filter (\d -> length d == 2) <$> listDirectory ".gith/objects/"
+        concat <$> for prefixes (\p ->
+            map (fromString . (p++)) <$> listDirectory (".gith/objects" </> p))
+
+    print $ length allRefs'
+
+    print $ allRefs == allRefs'
