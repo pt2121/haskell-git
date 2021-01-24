@@ -8,6 +8,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Lib
     ( printCommit
+    , printTree
+    , printBlob
     ) where
 
 import qualified Codec.Compression.Zlib           as Z (compress, decompress)
@@ -19,6 +21,8 @@ import qualified Data.Attoparsec.Internal.Types
 import           Data.Byteable                    (Byteable (toBytes))
 import           Data.ByteString                  (ByteString, intercalate)
 import qualified Data.ByteString                  as B
+import           Data.ByteString.Base16           (decode, encode)
+import qualified Data.ByteString.Char8            as BC
 import           Data.ByteString.Lazy             (fromStrict, toStrict)
 import           Data.ByteString.UTF8             (fromString, toString)
 import           Data.Digest.Pure.SHA             (sha1, showDigest)
@@ -40,7 +44,6 @@ data Commit = Commit
 
 -- .git/objects/ed/1296f274c0cdb46ae0e0bb4d189b5b14894e70
 -- .git/objects/ee/608769a7d6b5d4603d1dd41f6168c77c7051e5
--- .git/objects/14/a3ec5d7888b1606279ed72a4805f24b0e3edbd
 printCommit :: IO ()
 printCommit = do
     line <- getLine
@@ -112,3 +115,62 @@ withHeader objType content = mconcat [objType, " ", fromString . show $ B.length
 
 hash :: ByteString -> Ref
 hash = fromString . showDigest . sha1 . fromStrict
+
+-- for tree, instead of the 40-byte hexadecimal representation of a SHA1 hash,
+-- the 20-byte representation is use
+parseBinRef :: Parser Ref
+parseBinRef = encode <$> AC.take 20
+
+newtype Tree = Tree { treeEntries :: [TreeEntry] } deriving (Eq, Show)
+
+data TreeEntry = TreeEntry
+    { treeEntryPerms :: ByteString
+    , treeEntryName  :: ByteString
+    , treeEntryRef   :: Ref
+    } deriving (Eq, Show)
+
+parseTreeEntry :: Parser TreeEntry
+parseTreeEntry = do
+    perms <- fromString <$> AC.many1' AC.digit
+    AC.space
+    name  <- AC.takeWhile (/='\NUL')
+    AC.char '\NUL'
+    TreeEntry perms name <$> parseBinRef
+
+-- .git/objects/2f/f78c568de0058b6706c3b6e29210100f7b7266
+parseTree :: Parser Tree
+parseTree = Tree <$> AC.many' parseTreeEntry
+
+printTree :: IO ()
+printTree = do
+    line <- getLine
+    tree <- decompress <$> B.readFile line
+    parsedTree <- parse (parseHeader *> parseTree) tree
+    print parsedTree
+    t <- parse parseTree . toBytes $ parsedTree
+    print $ t == parsedTree
+
+instance Byteable TreeEntry where
+    toBytes (TreeEntry perms name ref) = mconcat [perms, " ", name, "\NUL", fst $ decode ref]
+
+instance Byteable Tree where
+    toBytes (Tree entries) = mconcat (map toBytes entries)
+
+newtype Blob = Blob { blobContent :: ByteString } deriving (Eq, Show)
+
+parseBlob :: Parser Blob
+parseBlob = Blob <$> AC.takeByteString
+
+-- .git/objects/14/a3ec5d7888b1606279ed72a4805f24b0e3edbd
+printBlob :: IO ()
+printBlob = do
+    line <- getLine
+    blob <- decompress <$> B.readFile line
+    print $ BC.unlines . take 10 . BC.lines $ blob
+    parsedBlob <- parse (parseHeader *> parseBlob) blob
+    print parsedBlob
+    b <- parse parseBlob . toBytes $ parsedBlob
+    print $ b == parsedBlob
+
+instance Byteable Blob where
+    toBytes (Blob content) = content

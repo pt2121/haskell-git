@@ -1,6 +1,6 @@
 module Main where
 
-import Lib ( printCommit )
+import Lib ( printBlob )
 
 main :: IO ()
-main = printCommit
+main = printBlob
